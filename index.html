@@ -1,0 +1,2787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>RoadGuard AI | Smart Road Monitoring</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- TensorFlow -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0"></script>
+
+    <!-- COCO SSD -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+    <!-- Font Awesome -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+    >
+
+    <style>
+
+        * {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background:
+                radial-gradient(
+                    circle at 20% 10%,
+                    rgba(250, 204, 21, 0.08),
+                    transparent 30%
+                ),
+                radial-gradient(
+                    circle at 90% 80%,
+                    rgba(59, 130, 246, 0.08),
+                    transparent 30%
+                ),
+                #07111f;
+        }
+
+        .glass {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        .glass-light {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .hero-grid {
+            background-image:
+                linear-gradient(
+                    rgba(255,255,255,0.025) 1px,
+                    transparent 1px
+                ),
+                linear-gradient(
+                    90deg,
+                    rgba(255,255,255,0.025) 1px,
+                    transparent 1px
+                );
+
+            background-size: 45px 45px;
+        }
+
+        .gradient-text {
+            background: linear-gradient(
+                90deg,
+                #facc15,
+                #fde68a
+            );
+
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        #video-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 4 / 5;
+            margin: auto;
+            overflow: hidden;
+            border-radius: 32px;
+            background: #000;
+            box-shadow:
+                0 30px 70px rgba(0,0,0,0.45),
+                0 0 60px rgba(250,204,21,0.07);
+        }
+
+        #webcam,
+        #overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #overlay {
+            pointer-events: none;
+        }
+
+        .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            top: 0;
+
+            background: #facc15;
+
+            box-shadow:
+                0 0 10px #facc15,
+                0 0 25px #facc15;
+
+            animation: scan 2.5s linear infinite;
+            z-index: 10;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 0;
+            }
+
+            100% {
+                top: 100%;
+            }
+        }
+
+        .pulse-dot {
+            animation: pulseDot 1.5s infinite;
+        }
+
+        @keyframes pulseDot {
+            0% {
+                box-shadow: 0 0 0 0 rgba(34,197,94,.6);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(34,197,94,0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(34,197,94,0);
+            }
+        }
+
+        .stat-card {
+            transition: all .3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(250,204,21,.3);
+        }
+
+        .report-row {
+            transition: all .2s ease;
+        }
+
+        .report-row:hover {
+            background: rgba(255,255,255,.035);
+        }
+
+        .nav-link {
+            transition: all .2s ease;
+        }
+
+        .nav-link:hover {
+            color: #facc15;
+        }
+
+        .modal {
+            transition: opacity .3s ease;
+        }
+
+    </style>
+</head>
+
+<body class="text-white font-sans">
+
+
+<!-- =====================================================
+                    NAVBAR
+===================================================== -->
+
+<header class="fixed top-0 left-0 right-0 z-50">
+
+    <nav class="glass">
+
+        <div
+            class="max-w-7xl mx-auto px-5 lg:px-8
+            h-20 flex items-center justify-between"
+        >
+
+            <!-- LOGO -->
+
+            <button
+                onclick="switchView('citizen')"
+                class="flex items-center gap-3"
+            >
+
+                <div
+                    class="w-11 h-11 rounded-xl
+                    bg-yellow-400 text-slate-950
+                    flex items-center justify-center
+                    shadow-lg shadow-yellow-500/20"
+                >
+
+                    <i class="fas fa-road text-lg"></i>
+
+                </div>
+
+                <div class="text-left">
+
+                    <div
+                        class="font-black tracking-tight text-lg"
+                    >
+                        ROADGUARD
+                        <span class="text-yellow-400">
+                            AI
+                        </span>
+                    </div>
+
+                    <div
+                        class="text-[9px] text-gray-500
+                        uppercase tracking-[.2em]"
+                    >
+                        Smart Road Safety
+                    </div>
+
+                </div>
+
+            </button>
+
+
+            <!-- NAV LINKS -->
+
+            <div
+                class="hidden md:flex items-center gap-7
+                text-sm font-medium text-gray-400"
+            >
+
+                <button
+                    onclick="switchView('citizen')"
+                    class="nav-link"
+                >
+                    Home
+                </button>
+
+                <a
+                    href="#how-it-works"
+                    class="nav-link"
+                >
+                    How It Works
+                </a>
+
+                <a
+                    href="#features"
+                    class="nav-link"
+                >
+                    Features
+                </a>
+
+                <button
+                    onclick="switchView('admin')"
+                    class="nav-link"
+                >
+                    Admin
+                </button>
+
+            </div>
+
+
+            <!-- STATUS -->
+
+            <div
+                class="hidden sm:flex items-center gap-2
+                bg-slate-800/70 border border-slate-700
+                rounded-full px-4 py-2"
+            >
+
+                <span
+                    class="w-2 h-2 rounded-full
+                    bg-green-400 pulse-dot"
+                ></span>
+
+                <span
+                    class="text-xs text-gray-300"
+                >
+                    System Online
+                </span>
+
+            </div>
+
+        </div>
+
+    </nav>
+
+</header>
+
+
+
+<!-- =====================================================
+                    CITIZEN VIEW
+===================================================== -->
+
+<main
+    id="citizen"
+    class="view active pt-20"
+>
+
+
+<!-- HERO -->
+
+<section
+    class="hero-grid min-h-[600px]
+    flex items-center"
+>
+
+    <div
+        class="max-w-7xl mx-auto px-5 lg:px-8
+        py-20 grid lg:grid-cols-2 gap-14
+        items-center w-full"
+    >
+
+        <!-- HERO TEXT -->
+
+        <div>
+
+            <div
+                class="inline-flex items-center gap-2
+                rounded-full bg-yellow-400/10
+                border border-yellow-400/20
+                px-4 py-2 mb-6"
+            >
+
+                <i
+                    class="fas fa-sparkles
+                    text-yellow-400 text-xs"
+                ></i>
+
+                <span
+                    class="text-xs font-semibold
+                    text-yellow-300"
+                >
+                    AI POWERED ROAD MONITORING
+                </span>
+
+            </div>
+
+
+            <h1
+                class="text-5xl md:text-6xl
+                lg:text-7xl font-black
+                leading-[.95] tracking-tight"
+            >
+
+                Safer roads.
+
+                <br>
+
+                <span class="gradient-text">
+                    Smarter cities.
+                </span>
+
+            </h1>
+
+
+            <p
+                class="mt-7 max-w-xl
+                text-gray-400 text-lg
+                leading-8"
+            >
+                Detect road damage, capture its location,
+                and report critical potholes before they
+                become a bigger problem.
+            </p>
+
+
+            <div
+                class="mt-9 flex flex-wrap gap-4"
+            >
+
+                <button
+                    onclick="scrollToScanner()"
+                    class="bg-yellow-400
+                    hover:bg-yellow-300
+                    text-slate-950 font-black
+                    px-7 py-4 rounded-2xl
+                    shadow-xl shadow-yellow-500/10
+                    transition"
+                >
+
+                    <i
+                        class="fas fa-camera mr-2"
+                    ></i>
+
+                    Start road scan
+
+                </button>
+
+
+                <button
+                    onclick="switchView('admin')"
+                    class="glass-light px-7 py-4
+                    rounded-2xl font-bold
+                    text-gray-200"
+                >
+
+                    <i
+                        class="fas fa-chart-line mr-2"
+                    ></i>
+
+                    View dashboard
+
+                </button>
+
+            </div>
+
+
+            <!-- MINI STATS -->
+
+            <div
+                class="mt-12 flex flex-wrap
+                gap-8"
+            >
+
+                <div>
+
+                    <div
+                        class="text-2xl
+                        font-black"
+                    >
+                        AI
+                    </div>
+
+                    <div
+                        class="text-xs
+                        text-gray-500 mt-1"
+                    >
+                        Detection engine
+                    </div>
+
+                </div>
+
+
+                <div>
+
+                    <div
+                        class="text-2xl
+                        font-black"
+                    >
+                        GPS
+                    </div>
+
+                    <div
+                        class="text-xs
+                        text-gray-500 mt-1"
+                    >
+                        Location tracking
+                    </div>
+
+                </div>
+
+
+                <div>
+
+                    <div
+                        class="text-2xl
+                        font-black"
+                    >
+                        24/7
+                    </div>
+
+                    <div
+                        class="text-xs
+                        text-gray-500 mt-1"
+                    >
+                        Monitoring ready
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- HERO SIDE CARD -->
+
+        <div class="relative hidden lg:block">
+
+            <div
+                class="absolute -top-10 -right-10
+                w-40 h-40 bg-yellow-400/10
+                blur-3xl rounded-full"
+            ></div>
+
+            <div
+                class="absolute -bottom-10 -left-10
+                w-40 h-40 bg-blue-500/10
+                blur-3xl rounded-full"
+            ></div>
+
+
+            <div
+                class="glass rounded-[35px]
+                p-5 relative z-10"
+            >
+
+                <div
+                    class="bg-slate-950
+                    rounded-[28px] p-5"
+                >
+
+                    <div
+                        class="flex items-center
+                        justify-between mb-5"
+                    >
+
+                        <div>
+
+                            <div
+                                class="text-sm
+                                font-bold"
+                            >
+                                Road scan
+                            </div>
+
+                            <div
+                                class="text-xs
+                                text-gray-500 mt-1"
+                            >
+                                Live AI monitoring
+                            </div>
+
+                        </div>
+
+
+                        <div
+                            class="flex items-center
+                            gap-2 text-xs
+                            text-green-400"
+                        >
+
+                            <span
+                                class="w-2 h-2
+                                bg-green-400
+                                rounded-full"
+                            ></span>
+
+                            LIVE
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        class="rounded-2xl
+                        bg-gradient-to-br
+                        from-slate-800 to-slate-900
+                        h-64 flex items-center
+                        justify-center
+                        border border-slate-700"
+                    >
+
+                        <div
+                            class="text-center"
+                        >
+
+                            <div
+                                class="w-20 h-20
+                                mx-auto rounded-2xl
+                                bg-yellow-400/10
+                                border border-yellow-400/20
+                                flex items-center
+                                justify-center
+                                mb-4"
+                            >
+
+                                <i
+                                    class="fas fa-video
+                                    text-yellow-400
+                                    text-2xl"
+                                ></i>
+
+                            </div>
+
+                            <p
+                                class="font-bold"
+                            >
+                                Camera ready
+                            </p>
+
+                            <p
+                                class="text-xs
+                                text-gray-500 mt-1"
+                            >
+                                Start scanning to detect
+                                road damage
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        class="grid grid-cols-2
+                        gap-3 mt-4"
+                    >
+
+                        <div
+                            class="bg-slate-900
+                            rounded-xl p-3
+                            border border-slate-800"
+                        >
+
+                            <div
+                                class="text-xs
+                                text-gray-500"
+                            >
+                                GPS
+                            </div>
+
+                            <div
+                                class="text-sm
+                                font-bold mt-1"
+                            >
+                                Ready
+                            </div>
+
+                        </div>
+
+
+                        <div
+                            class="bg-slate-900
+                            rounded-xl p-3
+                            border border-slate-800"
+                        >
+
+                            <div
+                                class="text-xs
+                                text-gray-500"
+                            >
+                                AI model
+                            </div>
+
+                            <div
+                                class="text-sm
+                                font-bold mt-1
+                                text-green-400"
+                            >
+                                Online
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- =====================================================
+                    SCANNER SECTION
+===================================================== -->
+
+<section
+    id="scanner"
+    class="py-24 px-5"
+>
+
+    <div
+        class="max-w-7xl mx-auto"
+    >
+
+        <div
+            class="text-center max-w-2xl
+            mx-auto mb-12"
+        >
+
+            <div
+                class="text-yellow-400
+                text-xs font-bold
+                uppercase tracking-[.25em]
+                mb-3"
+            >
+                Live road scanner
+            </div>
+
+            <h2
+                class="text-4xl md:text-5xl
+                font-black"
+            >
+                Scan. Detect. Report.
+            </h2>
+
+            <p
+                class="text-gray-400 mt-4"
+            >
+                Point your camera towards the road
+                and use the AI scanner to identify
+                potential road damage.
+            </p>
+
+        </div>
+
+
+        <div
+            class="grid lg:grid-cols-[1.1fr_.9fr]
+            gap-8 items-center"
+        >
+
+            <!-- CAMERA -->
+
+            <div>
+
+                <div
+                    id="video-container"
+                    class="border
+                    border-slate-700"
+                >
+
+                    <video
+                        id="webcam"
+                        autoplay
+                        playsinline
+                        muted
+                    ></video>
+
+                    <canvas
+                        id="overlay"
+                    ></canvas>
+
+                    <div
+                        class="scan-line"
+                    ></div>
+
+
+                    <!-- CAMERA TOP -->
+
+                    <div
+                        class="absolute top-4
+                        left-4 right-4 z-20
+                        flex justify-between
+                        items-center"
+                    >
+
+                        <div
+                            class="bg-black/60
+                            backdrop-blur-md
+                            rounded-full
+                            px-3 py-2
+                            text-xs"
+                        >
+
+                            <span
+                                class="w-2 h-2
+                                inline-block
+                                rounded-full
+                                bg-red-500
+                                mr-2"
+                            ></span>
+
+                            CAMERA LIVE
+
+                        </div>
+
+
+                        <div
+                            class="bg-black/60
+                            backdrop-blur-md
+                            rounded-full
+                            px-3 py-2"
+                        >
+
+                            <i
+                                class="fas fa-expand
+                                text-white text-xs"
+                            ></i>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- CAMERA STATUS -->
+
+                    <div
+                        class="absolute
+                        bottom-4 left-4 right-4
+                        z-20"
+                    >
+
+                        <div
+                            class="glass
+                            rounded-2xl
+                            p-4"
+                        >
+
+                            <div
+                                class="flex items-center
+                                justify-between"
+                            >
+
+                                <div>
+
+                                    <div
+                                        class="text-xs
+                                        text-gray-400"
+                                    >
+                                        Detection status
+                                    </div>
+
+                                    <div
+                                        id="detection-message"
+                                        class="font-bold mt-1"
+                                    >
+                                        Initializing...
+                                    </div>
+
+                                </div>
+
+
+                                <div
+                                    class="w-10 h-10
+                                    rounded-xl
+                                    bg-yellow-400/10
+                                    flex items-center
+                                    justify-center"
+                                >
+
+                                    <i
+                                        class="fas fa-crosshairs
+                                        text-yellow-400"
+                                    ></i>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- STATUS PANEL -->
+
+            <div
+                class="space-y-4"
+            >
+
+                <div
+                    class="glass
+                    rounded-3xl p-6"
+                >
+
+                    <div
+                        class="flex items-center
+                        gap-4"
+                    >
+
+                        <div
+                            class="w-12 h-12
+                            rounded-2xl
+                            bg-yellow-400/10
+                            flex items-center
+                            justify-center"
+                        >
+
+                            <i
+                                class="fas fa-microchip
+                                text-yellow-400"
+                            ></i>
+
+                        </div>
+
+                        <div>
+
+                            <div
+                                class="text-xs
+                                text-gray-500"
+                            >
+                                AI ENGINE
+                            </div>
+
+                            <div
+                                id="ai-status"
+                                class="font-bold mt-1"
+                            >
+                                Loading AI model...
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    class="glass
+                    rounded-3xl p-6"
+                >
+
+                    <div
+                        class="flex items-center
+                        gap-4"
+                    >
+
+                        <div
+                            class="w-12 h-12
+                            rounded-2xl
+                            bg-blue-400/10
+                            flex items-center
+                            justify-center"
+                        >
+
+                            <i
+                                class="fas fa-location-dot
+                                text-blue-400"
+                            ></i>
+
+                        </div>
+
+                        <div>
+
+                            <div
+                                class="text-xs
+                                text-gray-500"
+                            >
+                                LOCATION
+                            </div>
+
+                            <div
+                                id="gps-status"
+                                class="font-bold mt-1"
+                            >
+                                Checking GPS...
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    class="glass
+                    rounded-3xl p-6"
+                >
+
+                    <div
+                        class="flex items-center
+                        gap-4"
+                    >
+
+                        <div
+                            class="w-12 h-12
+                            rounded-2xl
+                            bg-green-400/10
+                            flex items-center
+                            justify-center"
+                        >
+
+                            <i
+                                class="fas fa-camera
+                                text-green-400"
+                            ></i>
+
+                        </div>
+
+                        <div>
+
+                            <div
+                                class="text-xs
+                                text-gray-500"
+                            >
+                                CAMERA
+                            </div>
+
+                            <div
+                                id="camera-status"
+                                class="font-bold mt-1"
+                            >
+                                Starting camera...
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- REPORT -->
+
+                <button
+                    id="report-btn"
+                    disabled
+                    onclick="sendReport()"
+                    class="w-full py-5
+                    rounded-2xl
+                    bg-slate-800
+                    text-slate-500
+                    border border-slate-700
+                    font-black text-lg
+                    transition"
+                >
+
+                    <i
+                        class="fas fa-shield-halved mr-2"
+                    ></i>
+
+                    SCANNING ROAD...
+
+                </button>
+
+
+                <p
+                    class="text-center
+                    text-[11px]
+                    text-gray-600"
+                >
+                    Reports will include the detected
+                    location and current timestamp.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- =====================================================
+                    HOW IT WORKS
+===================================================== -->
+
+<section
+    id="how-it-works"
+    class="py-24 px-5
+    border-y border-slate-800/70"
+>
+
+    <div
+        class="max-w-7xl mx-auto"
+    >
+
+        <div
+            class="text-center mb-14"
+        >
+
+            <div
+                class="text-yellow-400
+                text-xs font-bold
+                uppercase tracking-[.25em]"
+            >
+                Simple process
+            </div>
+
+            <h2
+                class="text-4xl font-black mt-3"
+            >
+                How RoadGuard works
+            </h2>
+
+        </div>
+
+
+        <div
+            class="grid md:grid-cols-3
+            gap-6"
+        >
+
+            <div
+                class="glass rounded-3xl p-7"
+            >
+
+                <div
+                    class="w-14 h-14 rounded-2xl
+                    bg-yellow-400 text-slate-950
+                    flex items-center
+                    justify-center
+                    text-xl font-black"
+                >
+                    01
+                </div>
+
+                <h3
+                    class="text-xl font-black mt-6"
+                >
+                    Capture
+                </h3>
+
+                <p
+                    class="text-gray-400
+                    text-sm mt-3 leading-7"
+                >
+                    The citizen opens the camera
+                    and scans the road using the
+                    mobile device.
+                </p>
+
+            </div>
+
+
+            <div
+                class="glass rounded-3xl p-7"
+            >
+
+                <div
+                    class="w-14 h-14 rounded-2xl
+                    bg-blue-400 text-slate-950
+                    flex items-center
+                    justify-center
+                    text-xl font-black"
+                >
+                    02
+                </div>
+
+                <h3
+                    class="text-xl font-black mt-6"
+                >
+                    Detect
+                </h3>
+
+                <p
+                    class="text-gray-400
+                    text-sm mt-3 leading-7"
+                >
+                    The AI model analyses the
+                    camera feed and highlights
+                    detected objects.
+                </p>
+
+            </div>
+
+
+            <div
+                class="glass rounded-3xl p-7"
+            >
+
+                <div
+                    class="w-14 h-14 rounded-2xl
+                    bg-green-400 text-slate-950
+                    flex items-center
+                    justify-center
+                    text-xl font-black"
+                >
+                    03
+                </div>
+
+                <h3
+                    class="text-xl font-black mt-6"
+                >
+                    Report
+                </h3>
+
+                <p
+                    class="text-gray-400
+                    text-sm mt-3 leading-7"
+                >
+                    A confirmed report is added
+                    to the city dashboard for
+                    maintenance action.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- =====================================================
+                    FEATURES
+===================================================== -->
+
+<section
+    id="features"
+    class="py-24 px-5"
+>
+
+    <div
+        class="max-w-7xl mx-auto"
+    >
+
+        <div
+            class="grid lg:grid-cols-2 gap-14
+            items-center"
+        >
+
+            <div>
+
+                <div
+                    class="text-yellow-400
+                    text-xs font-bold
+                    uppercase tracking-[.25em]"
+                >
+                    Built for safer streets
+                </div>
+
+                <h2
+                    class="text-4xl md:text-5xl
+                    font-black mt-4 leading-tight"
+                >
+                    One platform for
+                    <span class="gradient-text">
+                        smarter road maintenance.
+                    </span>
+                </h2>
+
+                <p
+                    class="text-gray-400
+                    mt-5 leading-8"
+                >
+                    RoadGuard AI connects citizen
+                    reporting with intelligent
+                    monitoring to make road safety
+                    easier to manage.
+                </p>
+
+            </div>
+
+
+            <div
+                class="grid sm:grid-cols-2
+                gap-4"
+            >
+
+                <div
+                    class="glass rounded-3xl
+                    p-6"
+                >
+
+                    <i
+                        class="fas fa-location-crosshairs
+                        text-blue-400 text-xl"
+                    ></i>
+
+                    <h3
+                        class="font-black mt-5"
+                    >
+                        GPS location
+                    </h3>
+
+                    <p
+                        class="text-gray-500
+                        text-sm mt-2"
+                    >
+                        Capture the location of
+                        road problems.
+                    </p>
+
+                </div>
+
+
+                <div
+                    class="glass rounded-3xl
+                    p-6"
+                >
+
+                    <i
+                        class="fas fa-brain
+                        text-yellow-400 text-xl"
+                    ></i>
+
+                    <h3
+                        class="font-black mt-5"
+                    >
+                        AI analysis
+                    </h3>
+
+                    <p
+                        class="text-gray-500
+                        text-sm mt-2"
+                    >
+                        Analyse camera footage
+                        automatically.
+                    </p>
+
+                </div>
+
+
+                <div
+                    class="glass rounded-3xl
+                    p-6"
+                >
+
+                    <i
+                        class="fas fa-chart-simple
+                        text-green-400 text-xl"
+                    ></i>
+
+                    <h3
+                        class="font-black mt-5"
+                    >
+                        Live dashboard
+                    </h3>
+
+                    <p
+                        class="text-gray-500
+                        text-sm mt-2"
+                    >
+                        Monitor submitted reports.
+                    </p>
+
+                </div>
+
+
+                <div
+                    class="glass rounded-3xl
+                    p-6"
+                >
+
+                    <i
+                        class="fas fa-bolt
+                        text-orange-400 text-xl"
+                    ></i>
+
+                    <h3
+                        class="font-black mt-5"
+                    >
+                        Fast response
+                    </h3>
+
+                    <p
+                        class="text-gray-500
+                        text-sm mt-2"
+                    >
+                        Help maintenance teams
+                        respond faster.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+</main>
+
+
+
+<!-- =====================================================
+                    ADMIN DASHBOARD
+===================================================== -->
+
+<main
+    id="admin"
+    class="view min-h-screen
+    pt-28 pb-12 px-5"
+>
+
+    <div
+        class="max-w-7xl mx-auto"
+    >
+
+        <!-- HEADER -->
+
+        <div
+            class="flex flex-col
+            md:flex-row md:items-center
+            justify-between gap-5 mb-10"
+        >
+
+            <div>
+
+                <div
+                    class="text-yellow-400
+                    text-xs font-bold
+                    uppercase tracking-[.25em]"
+                >
+                    Administration
+                </div>
+
+                <h2
+                    class="text-4xl font-black mt-2"
+                >
+                    City Command Center
+                </h2>
+
+                <p
+                    class="text-gray-500 mt-2"
+                >
+                    Monitor and manage road damage
+                    reports from citizens.
+                </p>
+
+            </div>
+
+
+            <button
+                onclick="switchView('citizen')"
+                class="glass-light
+                px-5 py-3 rounded-xl
+                font-bold text-sm"
+            >
+
+                <i
+                    class="fas fa-arrow-left mr-2"
+                ></i>
+
+                Back to scanner
+
+            </button>
+
+        </div>
+
+
+        <!-- STATS -->
+
+        <div
+            class="grid sm:grid-cols-2
+            lg:grid-cols-4 gap-4 mb-8"
+        >
+
+            <div
+                class="glass stat-card
+                rounded-3xl p-6"
+            >
+
+                <div
+                    class="flex justify-between
+                    items-center"
+                >
+
+                    <span
+                        class="text-xs text-gray-500
+                        uppercase font-bold"
+                    >
+                        Total reports
+                    </span>
+
+                    <div
+                        class="w-10 h-10
+                        rounded-xl
+                        bg-yellow-400/10
+                        flex items-center
+                        justify-center"
+                    >
+
+                        <i
+                            class="fas fa-file-lines
+                            text-yellow-400"
+                        ></i>
+
+                    </div>
+
+                </div>
+
+                <div
+                    id="stat-count"
+                    class="text-4xl
+                    font-black mt-4"
+                >
+                    0
+                </div>
+
+            </div>
+
+
+            <div
+                class="glass stat-card
+                rounded-3xl p-6"
+            >
+
+                <div
+                    class="flex justify-between
+                    items-center"
+                >
+
+                    <span
+                        class="text-xs text-gray-500
+                        uppercase font-bold"
+                    >
+                        High priority
+                    </span>
+
+                    <div
+                        class="w-10 h-10
+                        rounded-xl
+                        bg-red-400/10
+                        flex items-center
+                        justify-center"
+                    >
+
+                        <i
+                            class="fas fa-triangle-exclamation
+                            text-red-400"
+                        ></i>
+
+                    </div>
+
+                </div>
+
+                <div
+                    id="stat-high"
+                    class="text-4xl
+                    font-black mt-4"
+                >
+                    0
+                </div>
+
+            </div>
+
+
+            <div
+                class="glass stat-card
+                rounded-3xl p-6"
+            >
+
+                <div
+                    class="flex justify-between
+                    items-center"
+                >
+
+                    <span
+                        class="text-xs text-gray-500
+                        uppercase font-bold"
+                    >
+                        Pending
+                    </span>
+
+                    <div
+                        class="w-10 h-10
+                        rounded-xl
+                        bg-orange-400/10
+                        flex items-center
+                        justify-center"
+                    >
+
+                        <i
+                            class="fas fa-clock
+                            text-orange-400"
+                        ></i>
+
+                    </div>
+
+                </div>
+
+                <div
+                    id="stat-pending"
+                    class="text-4xl
+                    font-black mt-4"
+                >
+                    0
+                </div>
+
+            </div>
+
+
+            <div
+                class="glass stat-card
+                rounded-3xl p-6"
+            >
+
+                <div
+                    class="flex justify-between
+                    items-center"
+                >
+
+                    <span
+                        class="text-xs text-gray-500
+                        uppercase font-bold"
+                    >
+                        System
+                    </span>
+
+                    <div
+                        class="w-10 h-10
+                        rounded-xl
+                        bg-green-400/10
+                        flex items-center
+                        justify-center"
+                    >
+
+                        <i
+                            class="fas fa-server
+                            text-green-400"
+                        ></i>
+
+                    </div>
+
+                </div>
+
+                <div
+                    class="text-xl
+                    font-black mt-5
+                    text-green-400"
+                >
+                    OPERATIONAL
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- REPORTS -->
+
+        <div
+            class="glass rounded-3xl
+            overflow-hidden"
+        >
+
+            <div
+                class="p-6 border-b
+                border-slate-700/70
+                flex items-center
+                justify-between"
+            >
+
+                <div>
+
+                    <h3
+                        class="font-black text-lg"
+                    >
+                        Road reports
+                    </h3>
+
+                    <p
+                        class="text-xs
+                        text-gray-500 mt-1"
+                    >
+                        Latest road damage submissions
+                    </p>
+
+                </div>
+
+
+                <div
+                    class="text-xs
+                    bg-green-400/10
+                    text-green-400
+                    px-3 py-2 rounded-full"
+                >
+
+                    <span
+                        class="w-2 h-2
+                        inline-block
+                        rounded-full
+                        bg-green-400 mr-1"
+                    ></span>
+
+                    Live
+
+                </div>
+
+            </div>
+
+
+            <div class="overflow-x-auto">
+
+                <table
+                    class="w-full min-w-[700px]"
+                >
+
+                    <thead
+                        class="bg-slate-900/60"
+                    >
+
+                        <tr
+                            class="text-left
+                            text-xs
+                            uppercase
+                            text-gray-500"
+                        >
+
+                            <th class="p-5">
+                                Report
+                            </th>
+
+                            <th class="p-5">
+                                Location
+                            </th>
+
+                            <th class="p-5">
+                                Severity
+                            </th>
+
+                            <th class="p-5">
+                                Status
+                            </th>
+
+                            <th class="p-5">
+                                Action
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody
+                        id="report-list"
+                    ></tbody>
+
+                </table>
+
+            </div>
+
+
+            <div
+                id="empty-state"
+                class="p-16 text-center"
+            >
+
+                <div
+                    class="w-16 h-16
+                    rounded-2xl
+                    bg-slate-800
+                    mx-auto flex items-center
+                    justify-center"
+                >
+
+                    <i
+                        class="fas fa-inbox
+                        text-gray-600
+                        text-xl"
+                    ></i>
+
+                </div>
+
+                <h3
+                    class="font-bold
+                    mt-5 text-gray-400"
+                >
+                    No reports yet
+                </h3>
+
+                <p
+                    class="text-gray-600
+                    text-sm mt-2"
+                >
+                    Submitted road reports
+                    will appear here.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</main>
+
+
+
+<!-- =====================================================
+                    SUCCESS MODAL
+===================================================== -->
+
+<div
+    id="success-modal"
+    class="modal hidden fixed inset-0
+    bg-black/70 backdrop-blur-md
+    z-[100] items-center
+    justify-center p-5"
+>
+
+    <div
+        class="glass
+        max-w-md w-full
+        rounded-[32px]
+        p-8 text-center"
+    >
+
+        <div
+            class="w-20 h-20
+            rounded-3xl
+            bg-green-400/10
+            mx-auto flex items-center
+            justify-center"
+        >
+
+            <i
+                class="fas fa-check
+                text-green-400 text-3xl"
+            ></i>
+
+        </div>
+
+
+        <h3
+            class="text-2xl
+            font-black mt-6"
+        >
+            Report submitted
+        </h3>
+
+
+        <p
+            class="text-gray-400
+            mt-3 leading-7"
+        >
+            The road damage report has been
+            successfully added to the city
+            monitoring dashboard.
+        </p>
+
+
+        <button
+            onclick="closeModal()"
+            class="w-full
+            bg-yellow-400
+            hover:bg-yellow-300
+            text-slate-950
+            font-black
+            py-4 rounded-2xl
+            mt-7"
+        >
+            Done
+        </button>
+
+    </div>
+
+</div>
+
+
+
+<!-- =====================================================
+                    JAVASCRIPT
+===================================================== -->
+
+<script>
+
+    let model = null;
+
+    const video =
+        document.getElementById("webcam");
+
+    const canvas =
+        document.getElementById("overlay");
+
+    const ctx =
+        canvas.getContext("2d");
+
+    const reportBtn =
+        document.getElementById("report-btn");
+
+    const detectionMessage =
+        document.getElementById(
+            "detection-message"
+        );
+
+
+    let reports =
+        JSON.parse(
+            localStorage.getItem(
+                "roadguard_reports"
+            )
+        ) || [];
+
+
+    let detecting = false;
+
+    let lastDetection = false;
+
+
+    /* =====================================================
+                    VIEW SWITCH
+    ===================================================== */
+
+    function switchView(viewName) {
+
+        document
+            .querySelectorAll(".view")
+            .forEach(view => {
+
+                view.classList.remove("active");
+
+            });
+
+
+        document
+            .getElementById(viewName)
+            .classList.add("active");
+
+
+        if (viewName === "admin") {
+
+            updateAdmin();
+
+        }
+
+        window.scrollTo({
+            top: 0,
+            behavior: "smooth"
+        });
+
+    }
+
+
+    /* =====================================================
+                    SCROLL TO SCANNER
+    ===================================================== */
+
+    function scrollToScanner() {
+
+        document
+            .getElementById("scanner")
+            .scrollIntoView({
+                behavior: "smooth"
+            });
+
+    }
+
+
+    /* =====================================================
+                    AI STATUS
+    ===================================================== */
+
+    function setAIStatus(message) {
+
+        const element =
+            document.getElementById(
+                "ai-status"
+            );
+
+
+        element.innerHTML = `
+
+            <span
+                class="inline-flex
+                items-center gap-2"
+            >
+
+                <span
+                    class="w-2 h-2
+                    rounded-full
+                    bg-green-400"
+                ></span>
+
+                ${message}
+
+            </span>
+        `;
+
+    }
+
+
+    /* =====================================================
+                    CAMERA START
+    ===================================================== */
+
+    async function startCamera() {
+
+        if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+        ) {
+
+            throw new Error(
+                "Camera is not supported by this browser."
+            );
+
+        }
+
+
+        const stream =
+            await navigator
+                .mediaDevices
+                .getUserMedia({
+
+                    video: {
+
+                        facingMode: {
+                            ideal: "environment"
+                        },
+
+                        width: {
+                            ideal: 1280
+                        },
+
+                        height: {
+                            ideal: 720
+                        }
+
+                    },
+
+                    audio: false
+
+                });
+
+
+        video.srcObject = stream;
+
+
+        video.onloadedmetadata = () => {
+
+            canvas.width =
+                video.videoWidth;
+
+            canvas.height =
+                video.videoHeight;
+
+
+            document
+                .getElementById(
+                    "camera-status"
+                )
+                .innerHTML = `
+                    <span class="text-green-400">
+                        Active
+                    </span>
+                `;
+
+
+            detectionMessage.innerText =
+                "Scanning road surface...";
+
+
+            detect();
+
+        };
+
+    }
+
+
+    /* =====================================================
+                    AI DETECTION
+    ===================================================== */
+
+    async function detect() {
+
+        if (detecting || !model) {
+
+            setTimeout(
+                detect,
+                500
+            );
+
+            return;
+
+        }
+
+
+        detecting = true;
+
+
+        try {
+
+            const predictions =
+                await model.detect(video);
+
+
+            ctx.clearRect(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+
+            let found =
+                false;
+
+
+            predictions.forEach(
+                prediction => {
+
+                    if (
+                        prediction.score >= 0.50
+                    ) {
+
+                        found = true;
+
+
+                        const [
+                            x,
+                            y,
+                            width,
+                            height
+                        ] = prediction.bbox;
+
+
+                        ctx.strokeStyle =
+                            "#facc15";
+
+                        ctx.lineWidth =
+                            4;
+
+                        ctx.strokeRect(
+                            x,
+                            y,
+                            width,
+                            height
+                        );
+
+
+                        ctx.font =
+                            "bold 18px Arial";
+
+                        ctx.fillStyle =
+                            "#facc15";
+
+                        ctx.fillText(
+
+                            prediction
+                                .class
+                                .toUpperCase(),
+
+                            x,
+
+                            Math.max(
+                                25,
+                                y - 10
+                            )
+
+                        );
+
+                    }
+
+                }
+            );
+
+
+            if (found) {
+
+                lastDetection = true;
+
+
+                reportBtn.disabled =
+                    false;
+
+
+                reportBtn.innerHTML = `
+
+                    <i
+                        class="fas fa-triangle-exclamation
+                        mr-2"
+                    ></i>
+
+                    REPORT ROAD DAMAGE
+
+                `;
+
+
+                reportBtn.className =
+                    `
+                    w-full py-5
+                    rounded-2xl
+                    bg-yellow-400
+                    hover:bg-yellow-300
+                    text-slate-950
+                    border border-yellow-300
+                    font-black text-lg
+                    shadow-xl
+                    shadow-yellow-500/10
+                    transition
+                    `;
+
+
+                detectionMessage.innerHTML = `
+
+                    <span
+                        class="text-yellow-400"
+                    >
+                        Potential road object detected
+                    </span>
+
+                `;
+
+            } else {
+
+                lastDetection = false;
+
+
+                reportBtn.disabled =
+                    true;
+
+
+                reportBtn.innerHTML = `
+
+                    <i
+                        class="fas fa-radar mr-2"
+                    ></i>
+
+                    SCANNING ROAD...
+
+                `;
+
+
+                reportBtn.className =
+                    `
+                    w-full py-5
+                    rounded-2xl
+                    bg-slate-800
+                    text-slate-500
+                    border border-slate-700
+                    font-black text-lg
+                    transition
+                    `;
+
+
+                detectionMessage.innerText =
+                    "Scanning road surface...";
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                "AI Detection Error:",
+                error
+            );
+
+        }
+
+
+        detecting = false;
+
+
+        setTimeout(
+            detect,
+            500
+        );
+
+    }
+
+
+    /* =====================================================
+                    GPS
+    ===================================================== */
+
+    function getGPS() {
+
+        const gps =
+            document.getElementById(
+                "gps-status"
+            );
+
+
+        if (!navigator.geolocation) {
+
+            gps.innerHTML =
+                `<span class="text-red-400">
+                    Not supported
+                </span>`;
+
+            return;
+
+        }
+
+
+        navigator
+            .geolocation
+            .getCurrentPosition(
+
+                position => {
+
+                    const latitude =
+                        position.coords.latitude;
+
+                    const longitude =
+                        position.coords.longitude;
+
+
+                    gps.innerHTML =
+                        `
+                        <span
+                            class="text-green-400"
+                        >
+                            GPS Locked
+                        </span>
+
+                        <div
+                            class="text-[10px]
+                            text-gray-500
+                            mt-1"
+                        >
+                            ${latitude.toFixed(5)},
+                            ${longitude.toFixed(5)}
+                        </div>
+                        `;
+
+                },
+
+                error => {
+
+                    console.error(
+                        "GPS Error:",
+                        error
+                    );
+
+
+                    gps.innerHTML =
+                        `
+                        <span
+                            class="text-red-400"
+                        >
+                            GPS unavailable
+                        </span>
+                        `;
+
+                },
+
+                {
+
+                    enableHighAccuracy:
+                        true,
+
+                    timeout:
+                        10000,
+
+                    maximumAge:
+                        0
+
+                }
+
+            );
+
+    }
+
+
+    /* =====================================================
+                    SEND REPORT
+    ===================================================== */
+
+    function sendReport() {
+
+        if (!lastDetection) {
+
+            return;
+
+        }
+
+
+        const report = {
+
+            id: Date.now(),
+
+            location:
+                "Current GPS Location",
+
+            time:
+                new Date()
+                    .toLocaleTimeString(),
+
+            date:
+                new Date()
+                    .toLocaleDateString(),
+
+            severity:
+                "HIGH",
+
+            status:
+                "Pending"
+
+        };
+
+
+        reports.unshift(
+            report
+        );
+
+
+        localStorage.setItem(
+            "roadguard_reports",
+            JSON.stringify(reports)
+        );
+
+
+        updateAdmin();
+
+
+        document
+            .getElementById(
+                "success-modal"
+            )
+            .classList.remove("hidden");
+
+        document
+            .getElementById(
+                "success-modal"
+            )
+            .classList.add("flex");
+
+    }
+
+
+    /* =====================================================
+                    UPDATE ADMIN
+    ===================================================== */
+
+    function updateAdmin() {
+
+        const list =
+            document.getElementById(
+                "report-list"
+            );
+
+        const empty =
+            document.getElementById(
+                "empty-state"
+            );
+
+
+        const highReports =
+            reports.filter(
+                report =>
+                    report.severity === "HIGH"
+            ).length;
+
+
+        const pendingReports =
+            reports.filter(
+                report =>
+                    report.status === "Pending"
+            ).length;
+
+
+        document
+            .getElementById(
+                "stat-count"
+            )
+            .innerText =
+            reports.length;
+
+
+        document
+            .getElementById(
+                "stat-high"
+            )
+            .innerText =
+            highReports;
+
+
+        document
+            .getElementById(
+                "stat-pending"
+            )
+            .innerText =
+            pendingReports;
+
+
+        if (reports.length === 0) {
+
+            list.innerHTML = "";
+
+            empty.style.display =
+                "block";
+
+            return;
+
+        }
+
+
+        empty.style.display =
+            "none";
+
+
+        list.innerHTML =
+            reports
+            .map(
+                (report, index) => `
+
+                    <tr
+                        class="
+                            report-row
+                            border-b
+                            border-slate-800
+                        "
+                    >
+
+                        <td class="p-5">
+
+                            <div
+                                class="font-bold"
+                            >
+                                RG-${String(
+                                    report.id
+                                ).slice(-5)}
+                            </div>
+
+                            <div
+                                class="text-xs
+                                text-gray-600
+                                mt-1"
+                            >
+                                ${report.date}
+                                ·
+                                ${report.time}
+                            </div>
+
+                        </td>
+
+
+                        <td class="p-5">
+
+                            <div
+                                class="flex items-center
+                                gap-2"
+                            >
+
+                                <i
+                                    class="fas fa-location-dot
+                                    text-blue-400"
+                                ></i>
+
+                                <span>
+                                    ${report.location}
+                                </span>
+
+                            </div>
+
+                        </td>
+
+
+                        <td class="p-5">
+
+                            <span
+                                class="
+                                inline-flex
+                                items-center gap-2
+                                bg-red-400/10
+                                text-red-400
+                                px-3 py-1.5
+                                rounded-full
+                                text-[11px]
+                                font-bold
+                                "
+                            >
+
+                                <span
+                                    class="w-1.5 h-1.5
+                                    rounded-full
+                                    bg-red-400"
+                                ></span>
+
+                                ${report.severity}
+
+                            </span>
+
+                        </td>
+
+
+                        <td class="p-5">
+
+                            <span
+                                class="
+                                inline-flex
+                                bg-orange-400/10
+                                text-orange-400
+                                px-3 py-1.5
+                                rounded-full
+                                text-[11px]
+                                font-bold
+                                "
+                            >
+
+                                ${report.status}
+
+                            </span>
+
+                        </td>
+
+
+                        <td class="p-5">
+
+                            ${
+                                report.status ===
+                                "Pending"
+                                    ? `
+                                    <button
+                                        onclick="
+                                        dispatchReport(
+                                            ${report.id}
+                                        )
+                                        "
+                                        class="
+                                        bg-blue-400/10
+                                        text-blue-400
+                                        px-4 py-2
+                                        rounded-xl
+                                        font-bold
+                                        text-xs
+                                        hover:bg-blue-400
+                                        hover:text-white
+                                        transition
+                                        "
+                                    >
+                                        Dispatch
+                                    </button>
+                                    `
+                                    :
+                                    `
+                                    <span
+                                        class="
+                                        text-green-400
+                                        text-xs
+                                        font-bold
+                                        "
+                                    >
+                                        Completed
+                                    </span>
+                                    `
+                            }
+
+                        </td>
+
+                    </tr>
+
+                `
+            )
+            .join("");
+
+    }
+
+
+    /* =====================================================
+                    DISPATCH
+    ===================================================== */
+
+    function dispatchReport(id) {
+
+        const report =
+            reports.find(
+                r => r.id === id
+            );
+
+
+        if (!report) {
+
+            return;
+
+        }
+
+
+        report.status =
+            "Dispatched";
+
+
+        localStorage.setItem(
+            "roadguard_reports",
+            JSON.stringify(reports)
+        );
+
+
+        updateAdmin();
+
+        alert(
+            "Maintenance team dispatched successfully."
+        );
+
+    }
+
+
+    /* =====================================================
+                    MODAL
+    ===================================================== */
+
+    function closeModal() {
+
+        const modal =
+            document.getElementById(
+                "success-modal"
+            );
+
+
+        modal.classList.add(
+            "hidden"
+        );
+
+        modal.classList.remove(
+            "flex"
+        );
+
+    }
+
+
+    /* =====================================================
+                    INITIALIZE
+    ===================================================== */
+
+    async function init() {
+
+        try {
+
+            setAIStatus(
+                "Loading AI model..."
+            );
+
+
+            model =
+                await cocoSsd.load();
+
+
+            setAIStatus(
+                "AI engine ready"
+            );
+
+
+            await startCamera();
+
+        } catch (error) {
+
+            console.error(
+                "Initialization error:",
+                error
+            );
+
+
+            setAIStatus(
+                "AI initialization failed"
+            );
+
+
+            document
+                .getElementById(
+                    "camera-status"
+                )
+                .innerHTML =
+                `
+                <span
+                    class="text-red-400"
+                >
+                    Camera unavailable
+                </span>
+                `;
+
+
+            detectionMessage.innerText =
+                "Please allow camera access and run the website on localhost.";
+
+        }
+
+    }
+
+
+    /* START EVERYTHING */
+
+    getGPS();
+
+    updateAdmin();
+
+    init();
+
+</script>
+
+</body>
+</html>
